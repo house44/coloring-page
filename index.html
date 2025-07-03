@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <title>Click to Color</title>
+ <style>
+   body {
+     text-align: center;
+     font-family: sans-serif;
+   }
+   #colorPalette {
+     margin: 20px auto;
+   }
+   .color-swatch {
+     display: inline-block;
+     width: 30px;
+     height: 30px;
+     margin: 0 5px;
+     border: 2px solid black;
+     cursor: pointer;
+   }
+   canvas {
+     border: 1px solid #333;
+     margin-top: 10px;
+     display: block;
+     margin-left: auto;
+     margin-right: auto;
+   }
+   .button-row {
+     margin: 15px;
+   }
+   button {
+     padding: 8px 16px;
+     font-size: 16px;
+     margin: 0 10px;
+     cursor: pointer;
+   }
+ </style>
+</head>
+<body>
+ <h1>Click to Color</h1>
+ <div id="colorPalette"></div>
+ <div class="button-row">
+   <button id="undoButton">Undo</button>
+   <button id="saveButton">Save as PNG</button>  </div>  <canvas id="coloringCanvas"></canvas>
+
+ <script>
+   const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#000000', '#FFFFFF'];
+   let currentColor = colors[0];
+   const undoStack = [];
+
+   const canvas = document.getElementById('coloringCanvas');
+   const ctx = canvas.getContext('2d');
+   const image = new Image();
+   image.src = '68B5F82E-C014-4DB0-B512-10AD84EC531F.png'; // Make sure this file is in the same folder
+
+   // Build color palette
+   const paletteDiv = document.getElementById('colorPalette');
+   colors.forEach(color => {
+     const swatch = document.createElement('div');
+     swatch.className = 'color-swatch';
+     swatch.style.backgroundColor = color;
+     swatch.onclick = () => currentColor = color;
+     paletteDiv.appendChild(swatch);
+   });
+
+   image.onload = function () {
+     canvas.width = image.width;
+     canvas.height = image.height;
+     ctx.drawImage(image, 0, 0);
+   };
+
+   function getPixelColor(data, x, y, width) {
+     const i = (y * width + x) * 4;
+     return [data[i], data[i+1], data[i+2], data[i+3]];
+   }
+
+   function setPixelColor(data, x, y, width, color) {
+     const i = (y * width + x) * 4;
+     data[i] = color[0];
+     data[i+1] = color[1];
+     data[i+2] = color[2];
+     data[i+3] = 255;
+   }
+
+   function colorMatch(a, b) {
+     return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
+   }
+
+   function hexToRGBA(hex) {
+     const bigint = parseInt(hex.slice(1), 16);
+     return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255, 255];
+   }
+
+   function floodFill(x, y) {
+     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+     const data = imageData.data;
+     const width = canvas.width;
+     const height = canvas.height;
+
+     const targetColor = getPixelColor(data, x, y, width);
+     const fillColor = hexToRGBA(currentColor);
+
+     if (colorMatch(targetColor, fillColor)) return;
+
+     undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+     if (undoStack.length > 10) undoStack.shift();
+
+     const stack = [[x, y]];
+
+     while (stack.length) {
+       const [cx, cy] = stack.pop();
+       const current = getPixelColor(data, cx, cy, width);
+
+       if (!colorMatch(current, targetColor)) continue;
+
+       setPixelColor(data, cx, cy, width, fillColor);
+
+       if (cx > 0) stack.push([cx - 1, cy]);
+       if (cx < width - 1) stack.push([cx + 1, cy]);
+       if (cy > 0) stack.push([cx, cy - 1]);
+       if (cy < height - 1) stack.push([cx, cy + 1]);
+     }
+
+     ctx.putImageData(imageData, 0, 0);
+   }
+
+   canvas.addEventListener('click', function (event) {
+     const rect = canvas.getBoundingClientRect();
+     const x = Math.floor(event.clientX - rect.left);
+     const y = Math.floor(event.clientY - rect.top);
+     floodFill(x, y);
+   });
+
+   document.getElementById('undoButton').addEventListener('click', () => {
+     if (undoStack.length > 0) {
+       const previous = undoStack.pop();
+       ctx.putImageData(previous, 0, 0);
+     }
+   });
+
+   document.getElementById('saveButton').addEventListener('click', () => {
+     const link = document.createElement('a');
+     link.download = 'my_coloring.png';
+     link.href = canvas.toDataURL('image/png');
+     link.click();
+   });
+ </script>
+</body>
+</html>
